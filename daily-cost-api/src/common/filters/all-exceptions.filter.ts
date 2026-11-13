@@ -9,6 +9,7 @@ import { Response } from 'express';
 import { defaultErrorCodeForStatus, ErrorCode } from '../constants/error-codes';
 import { AppException } from '../exceptions/app.exception';
 import { RequestWithId } from '../types/request-with-id';
+import { getRequestPath } from '../utils/request-path';
 
 interface ErrorBody {
   code: ErrorCode;
@@ -29,19 +30,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const { status, error } = this.normalize(exception);
     const requestId = req.requestId ?? null;
+    const path = getRequestPath(req);
 
     if (status >= 500) {
       this.logger.error(
-        `${req.method} ${req.url} -> ${status} requestId=${requestId}`,
+        `${req.method} ${path} ${req.url} -> ${status} requestId=${requestId}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     } else {
       this.logger.debug(
-        `${req.method} ${req.url} -> ${status} ${error.code} requestId=${requestId}`,
+        `${req.method} ${path} ${req.url} -> ${status} ${error.code} requestId=${requestId}`,
       );
     }
 
-    res.status(status).json({ error: { ...error, path: req.path, requestId } });
+    res.status(status).json({ error: { ...error, path, requestId } });
   }
 
   private normalize(exception: unknown): { status: number; error: ErrorBody } {

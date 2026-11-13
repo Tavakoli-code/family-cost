@@ -17,7 +17,7 @@ function run(exception: unknown, requestId?: string) {
   const host = {
     switchToHttp: () => ({
       getResponse: () => ({ status, headersSent: false }),
-      getRequest: () => ({ method: 'GET', url: '/x?token=abc', path: '/x', requestId }),
+      getRequest: () => ({ method: 'GET', url: '/x?token=abc', originalUrl: '/x?token=abc', requestId }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -80,5 +80,19 @@ describe('AllExceptionsFilter', () => {
   it('does not include the query string in path', () => {
   const { body } = run(new NotFoundException());
   expect(body.error.path).toBe('/x');
+});
+
+it('keeps the API prefix in path', () => {
+  const json = jest.fn();
+  const status = jest.fn().mockReturnValue({ json });
+  const host = {
+    switchToHttp: () => ({
+      getResponse: () => ({ status, headersSent: false }),
+      getRequest: () => ({ method: 'GET', url: '/nope', originalUrl: '/api/v1/nope?x=1' }),
+    }),
+  } as unknown as ArgumentsHost;
+
+  new AllExceptionsFilter().catch(new NotFoundException(), host);
+  expect(json.mock.calls[0][0].error.path).toBe('/api/v1/nope');
 });
 });
