@@ -8,14 +8,10 @@ import {
 import { Response } from 'express';
 import { defaultErrorCodeForStatus, ErrorCode } from '../constants/error-codes';
 import { AppException } from '../exceptions/app.exception';
+import { NormalizedError } from '../types/normalized-error';
 import { RequestWithId } from '../types/request-with-id';
 import { getRequestPath } from '../utils/request-path';
-
-interface ErrorBody {
-  code: ErrorCode;
-  message: string;
-  details?: unknown;
-}
+import { mapPrismaError } from './prisma-error.mapper';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -34,19 +30,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (status >= 500) {
       this.logger.error(
-        `${req.method} ${path} ${req.url} -> ${status} requestId=${requestId}`,
+        `${req.method} ${path} -> ${status} requestId=${requestId}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     } else {
       this.logger.debug(
-        `${req.method} ${path} ${req.url} -> ${status} ${error.code} requestId=${requestId}`,
+        `${req.method} ${path} -> ${status} ${error.code} requestId=${requestId}`,
       );
     }
 
     res.status(status).json({ error: { ...error, path, requestId } });
   }
 
-  private normalize(exception: unknown): { status: number; error: ErrorBody } {
+  private normalize(exception: unknown): NormalizedError {
     if (exception instanceof AppException) {
       return {
         status: exception.getStatus(),
@@ -58,6 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // 2) Any other Nest exception (NotFoundException, ForbiddenException, ...)
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const response = exception.getResponse();
@@ -85,6 +82,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         },
       };
     }
+
+    const prisma = mapPrismaError(exception);
+    if (prisma) return prisma;
 
     const clientStatus = this.clientErrorStatus(exception);
     if (clientStatus) {

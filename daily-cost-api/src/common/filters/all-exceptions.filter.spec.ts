@@ -10,6 +10,7 @@ import {
 import { ErrorCode } from '../constants/error-codes';
 import { AppException } from '../exceptions/app.exception';
 import { AllExceptionsFilter } from './all-exceptions.filter';
+import { Prisma } from '@prisma/client';
 
 function run(exception: unknown, requestId?: string) {
   const json = jest.fn();
@@ -80,19 +81,32 @@ describe('AllExceptionsFilter', () => {
   it('does not include the query string in path', () => {
   const { body } = run(new NotFoundException());
   expect(body.error.path).toBe('/x');
-});
+  });
 
-it('keeps the API prefix in path', () => {
-  const json = jest.fn();
-  const status = jest.fn().mockReturnValue({ json });
-  const host = {
-    switchToHttp: () => ({
-      getResponse: () => ({ status, headersSent: false }),
-      getRequest: () => ({ method: 'GET', url: '/nope', originalUrl: '/api/v1/nope?x=1' }),
-    }),
-  } as unknown as ArgumentsHost;
+  it('keeps the API prefix in path', () => {
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => ({ status, headersSent: false }),
+        getRequest: () => ({ method: 'GET', url: '/nope', originalUrl: '/api/v1/nope?x=1' }),
+      }),
+    } as unknown as ArgumentsHost;
 
-  new AllExceptionsFilter().catch(new NotFoundException(), host);
-  expect(json.mock.calls[0][0].error.path).toBe('/api/v1/nope');
-});
+    new AllExceptionsFilter().catch(new NotFoundException(), host);
+    expect(json.mock.calls[0][0].error.path).toBe('/api/v1/nope');
+  });
+
+  it('maps a Prisma unique violation to 409 ALREADY_EXISTS', () => {
+    const error = new Prisma.PrismaClientKnownRequestError('raw', {
+      code: 'P2002',
+      clientVersion: Prisma.prismaVersion.client,
+      meta: { target: ['email'] },
+    });
+    const { status, body } = run(error);
+    expect(status).toBe(409);
+    expect(body.error.code).toBe('ALREADY_EXISTS');
+    expect(body.error.details).toEqual({ fields: ['email'] });
+    expect(JSON.stringify(body)).not.toContain('raw');
+  });
 });
