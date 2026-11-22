@@ -1,132 +1,179 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Daily Cost API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend for **Daily Cost**, an Android app (web admin planned) for tracking **family** expenses and income. Several family members use their own phones and share one set of data: wallets, categories, transactions and a monthly report.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> **Status:** early development. The foundation is in place (project scaffold, Prisma schema and migration, global error handling, response envelope). Auth, families, wallets, transactions and reports are planned; see [Roadmap](#roadmap).
 
-## Description
+## Tech stack
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+| Area | Choice |
+|---|---|
+| Framework | NestJS 12 (CommonJS), TypeScript |
+| Database | PostgreSQL 15, Prisma 6 |
+| Auth (planned) | Phone or email + password (argon2), JWT access token, rotating refresh tokens |
+| Tests | Jest |
+| Local database | Docker Compose |
+| Push (planned) | Firebase Cloud Messaging |
 
-## Project setup
+## Requirements
+
+- **Node 24** (`>= 24.15`). The version is pinned in `.nvmrc`; run `nvm use`. Nest 12 publishes ES modules, and Jest only loads them on Node 24.9 or newer.
+- Docker (Docker Desktop is fine)
+- npm
+
+## Getting started
 
 ```bash
-$ npm install
+nvm use
+npm install
+docker compose up -d          # PostgreSQL on localhost:5433
+npx prisma migrate dev        # apply migrations and generate the client
+npm run start:dev             # http://localhost:3000/api/v1
 ```
 
-## Compile and run the project
+Create a `.env` file in the project root (it is git-ignored, never commit it):
+
+| Variable | Example | Notes |
+|---|---|---|
+| `DB_USER` | `dailycost` | Used by `docker-compose.yml` |
+| `DB_PASSWORD` | `change-me` | Avoid `@` and `/`, or URL-encode them in `DATABASE_URL` |
+| `DB_NAME` | `dailycost` | |
+| `DB_PORT` | `5433` | Host port, so it doesn't clash with another local Postgres |
+| `DATABASE_URL` | `postgresql://dailycost:change-me@localhost:5433/dailycost?schema=public` | Must match the values above |
+| `JWT_ACCESS_SECRET` | *(long random string)* | Needed from the auth milestone |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900` | |
+| `REFRESH_TOKEN_TTL_DAYS` | `30` | |
+| `PORT` | `3000` | Optional |
+
+Generate a secret with:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-## Run tests
+## Scripts
+
+| Command | Purpose |
+|---|---|
+| `npm run start:dev` | Run with file watching |
+| `npm run build` | Compile to `dist/` |
+| `npm run start:prod` | Run the compiled build |
+| `npm test` | Unit tests |
+| `npm run test:cov` | Unit tests with coverage |
+| `npx prisma migrate dev --name <name>` | Create and apply a migration |
+| `npx prisma studio` | Browse the database |
+
+Database containers: `docker compose stop` / `start` keeps the data, `docker compose down -v` wipes it.
+
+## Project structure
+
+```
+prisma/
+  schema.prisma             data model (9 tables)
+  migrations/               SQL migrations
+src/
+  main.ts                   global prefix /api/v1, validation pipe
+  app.module.ts             module wiring, global filter and interceptor
+  prisma/                   PrismaModule and PrismaService (global)
+  common/                   shared building blocks
+    constants/              error codes (default categories: planned)
+    exceptions/             AppException
+    filters/                global exception filter
+    interceptors/           response envelope
+    pagination/             Paginated result
+    decorators/             @SkipResponseWrap (auth decorators: planned)
+    types/  utils/
+  modules/                  one folder per feature (planned)
+    auth  users  families  members  invitations
+    wallets  categories  transactions  reports  notifications
+test/                       end-to-end tests
+```
+
+## API conventions
+
+All routes live under `/api/v1`. Every route will require a JWT unless marked public. Routes of a family live under `/families/:familyId/...` and are limited to its active members.
+
+### Responses
+
+Success:
+
+```json
+{ "data": { "id": "..." }, "meta": { "path": "/api/v1/wallets" } }
+```
+
+Lists add pagination to `meta`:
+
+```json
+{ "data": [ ], "meta": { "path": "/api/v1/transactions", "total": 120, "limit": 50, "offset": 0 } }
+```
+
+Errors (the HTTP status is always set to match):
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Cannot GET /api/v1/nope",
+    "details": null,
+    "path": "/api/v1/nope",
+    "requestId": null
+  }
+}
+```
+
+- Controllers return plain values; list endpoints return `new Paginated(items, total, limit, offset)`.
+- `@SkipResponseWrap()` opts a route out of the envelope (health check, file downloads).
+- `path` is the full request path without the query string.
+- **Clients must branch on `error.code`, never on `error.message`.** Codes are stable and machine-readable so the Android and web apps can show Dari, Pashto or English text. Messages are English, for developers.
+- Validation failures use `VALIDATION_FAILED`, with the failing fields in `details`.
+- Unknown errors return a generic 500. Internals are logged on the server and never sent to the client.
+- Core codes: `BAD_REQUEST`, `VALIDATION_FAILED`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `TOO_MANY_REQUESTS`, `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`. The full list is in `src/common/constants/error-codes.ts`.
+- `requestId` is `null` until the request-ID middleware lands.
+
+### Domain rules
+
+- **Money** is an integer in minor units (`amountMinor`, always > 0). The sign comes from the transaction type; the currency is set per family.
+- **`transactions` is the ledger**: type `INCOME`, `EXPENSE` or `TRANSFER`. A wallet balance is calculated (opening balance + income - expense + transfers in - transfers out), never stored.
+- **Soft delete** (`deletedAt`) for transactions and wallets. Categories are archived, not deleted.
+- **Optimistic locking**: updating a transaction requires the `version` the client last saw; a mismatch returns 409.
+- **Dates are UTC.** Reports take `from` (inclusive) and `to` (exclusive); the app converts Jalali or Gregorian month boundaries.
+- Non-members get **404** (not 403) for a family's routes, so family ids can't be probed.
+
+### Roles
+
+| Action | Owner | Admin | Member | Viewer |
+|---|---|---|---|---|
+| View data and reports | yes | yes | yes | yes |
+| Add transactions, edit own | yes | yes | yes | no |
+| Edit or delete anyone's | yes | yes | no | no |
+| Manage wallets and categories | yes | yes | no | no |
+| Invite and remove members | yes | yes | no | no |
+| Change roles, update or delete the family | yes | no | no | no |
+
+## Testing
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm test
 ```
 
-## Deployment
+If every suite fails with `Must use import to load ES Module`, you are on Node older than 24.9. Run `nvm use`.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Contributing workflow
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- Branch from a fresh `main`: `feat/<short-name>`, `fix/...`, `chore/...`.
+- Conventional Commits, with `Refs #<issue>` in the body.
+- Open a pull request with `Closes #<issue>` in the description so the issue closes on merge.
+- Run `npm test && npm run build` before pushing.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+## Roadmap
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Tracked as GitHub milestones and issues:
 
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
-
-```bash
-$ npx @nestjs/observe link
-```
-
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
-
-Or do it by hand:
-
-```bash
-$ npm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+1. **Foundation**: error handling, response envelope, request ID, env validation, CORS, pagination, health check, Swagger
+2. **Auth and users**: register, login, refresh tokens, JWT guard, rate limiting
+3. **Families and access control**: families, membership and permission guards, members, invitations
+4. **Wallets and categories**
+5. **Transactions**: validation rules, optimistic locking, idempotent create
+6. **Reports**: monthly summary, by category and member, savings
+7. **Notifications and hardening**: FCM, cleanup jobs, Docker, CI, backups, e2e tests
+8. **V1 release**
