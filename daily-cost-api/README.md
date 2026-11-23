@@ -76,6 +76,49 @@ The web admin runs in a browser, so its origin must be allowed. Set `CORS_ORIGIN
 
 The endpoint checks API-to-database connectivity, not the status of migrations or every dependency. Use it for readiness monitoring rather than database-dependent liveness restarts.
 
+## Swagger API Documentation
+
+Daily Cost uses OpenAPI/Swagger for interactive API documentation.
+
+### Development
+
+Start the backend:
+
+```bash
+npm run start:dev
+```
+
+Open Swagger UI at:
+
+`http://localhost:3000/api/docs`
+
+The OpenAPI JSON specification is available at:
+
+`http://localhost:3000/api/docs-json`
+
+### Authentication
+
+Protected endpoints use JWT Bearer authentication.
+
+1. Obtain an access token using the login endpoint once authentication is implemented.
+2. Open Swagger UI and select **Authorize**.
+3. Enter the JWT access token.
+4. Execute protected endpoints using Swagger UI.
+
+Public endpoints, including `/health`, do not require authentication.
+
+### Production
+
+Swagger UI and OpenAPI document endpoints are not registered when `NODE_ENV=production`.
+
+Do not enable Swagger publicly in production without a deliberate security review.
+
+### API Response Format
+
+Successful responses follow the `{ data, meta }` convention. Paginated responses include `total`, `limit`, and `offset` inside `meta`.
+
+Errors use the standard `{ error }` envelope with a stable error code and request ID.
+
 ## Scripts
 
 | Command                                | Purpose                      |
