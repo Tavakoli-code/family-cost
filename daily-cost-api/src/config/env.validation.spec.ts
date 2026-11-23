@@ -117,3 +117,38 @@ describe('validateEnv', () => {
     expect(message).toContain('JWT_ACCESS_SECRET:');
   });
 });
+
+describe('CORS_ORIGINS', () => {
+  it('is optional', () => {
+    expect(() => validateEnv(base)).not.toThrow();
+  });
+
+  it('accepts a blank value (no browser origins)', () => {
+    expect(() => validateEnv({ ...base, CORS_ORIGINS: '' })).not.toThrow();
+  });
+
+  it('accepts a comma separated list', () => {
+    const env = validateEnv({
+      ...base,
+      CORS_ORIGINS: 'https://admin.example.com, http://localhost:5173',
+    });
+    expect(env.CORS_ORIGINS).toBe(
+      'https://admin.example.com, http://localhost:5173',
+    );
+  });
+
+  it.each([
+    '*',
+    'https://admin.example.com/',
+    'localhost:5173',
+    'https://a.com/path',
+  ])('rejects %p and names it', (bad) => {
+    const message = failure({
+      ...base,
+      CORS_ORIGINS: `https://ok.example.com,${bad}`,
+    }).message;
+    expect(message).toContain('CORS_ORIGINS: invalid origin(s)');
+    expect(message).toContain(bad.toLowerCase());
+    expect(message).not.toContain('https://ok.example.com,');
+  });
+});
