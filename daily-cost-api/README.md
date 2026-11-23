@@ -116,7 +116,7 @@ Errors (the HTTP status is always set to match):
     "message": "Cannot GET /api/v1/nope",
     "details": null,
     "path": "/api/v1/nope",
-    "requestId": null
+    "requestId": "b6f1c3a2-5d7e-4f90-8a1b-3c2d4e5f6a7b"
   }
 }
 ```
@@ -128,7 +128,7 @@ Errors (the HTTP status is always set to match):
 - Validation failures use `VALIDATION_FAILED`, with the failing fields in `details`.
 - Unknown errors return a generic 500. Internals are logged on the server and never sent to the client.
 - Core codes: `BAD_REQUEST`, `VALIDATION_FAILED`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `TOO_MANY_REQUESTS`, `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`. The full list is in `src/common/constants/error-codes.ts`.
-- `requestId` is `null` until the request-ID middleware lands.
+- Every request gets an id: a valid incoming `X-Request-Id` header (1-64 characters: letters, digits, `.`, `_`, `-`) is reused, otherwise one is generated. It is returned in the `X-Request-Id` response header, in every error body as `requestId`, and in the server logs. Quote it when reporting a problem.
 
 ### Domain rules
 
