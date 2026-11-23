@@ -33,10 +33,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `${req.method} ${path} -> ${status} requestId=${requestId}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
-    } else {
-      this.logger.debug(
-        `${req.method} ${path} -> ${status} ${error.code} requestId=${requestId}`,
-      );
     }
 
     res.status(status).json({ error: { ...error, path, requestId } });
@@ -54,7 +50,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
-    // 2) Any other Nest exception (NotFoundException, ForbiddenException, ...)
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const response = exception.getResponse();
@@ -99,7 +94,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     return {
       status: 500,
-      error: { code: ErrorCode.INTERNAL_ERROR, message: 'Internal server error' },
+      error: {
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Internal server error',
+      },
     };
   }
 
