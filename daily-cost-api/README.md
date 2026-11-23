@@ -253,3 +253,39 @@ Tracked as GitHub milestones and issues:
 6. **Reports**: monthly summary, by category and member, savings
 7. **Notifications and hardening**: FCM, cleanup jobs, Docker, CI, backups, e2e tests
 8. **V1 release**
+
+## Money and Date Utilities
+
+Shared utilities are implemented in `src/common/utils/`.
+
+### Money
+
+- Monetary values are stored as integer minor units.
+- Single monetary amounts stored in Prisma `Int` columns are limited to 2,147,483,647 minor units.
+- Transaction amounts must be positive.
+- Zero is allowed for applicable values such as wallet opening balances.
+- Major-unit conversion uses decimal strings and `BigInt`, avoiding floating-point rounding errors.
+- Currency precision must be provided explicitly.
+- Calculated balances may be negative and must remain within JavaScript's safe integer range.
+- The Android application handles currency presentation and localization.
+
+### Dates
+
+- Timestamps are stored in UTC.
+- API date filters use explicit ISO 8601 UTC timestamps ending in `Z`.
+- Report ranges use inclusive `from` and exclusive `to` boundaries.
+- Optional date bounds are supported for transaction lists.
+- Invalid dates and reversed ranges are rejected.
+- Jalali and Gregorian calendar month boundaries are calculated using the family's intended timezone, then converted to UTC before submission to the backend.
+
+### Utilities
+
+- `assertMinorAmount()`
+- `toMinorUnits()`
+- `fromMinorUnits()`
+- `addMinorUnits()`
+- `parseUtcDateTime()`
+- `createUtcDateRange()`
+- `createOptionalUtcDateRange()`
+
+All monetary and date helpers are pure functions, independent of NestJS, Prisma, and HTTP request handling.
