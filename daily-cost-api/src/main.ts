@@ -4,6 +4,8 @@ import { EnvValidationError } from './config/env.validation';
 import { createValidationPipe } from './common/pipes/app-validation.pipe';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { requestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { buildCorsOptions, describeCors, parseCorsOrigins } from './config/cors.config';
+import { Logger } from '@nestjs/common';
 
 async function loadAppModule() {
   try {
@@ -23,12 +25,19 @@ async function loadAppModule() {
 async function bootstrap() {
   const AppModule = await loadAppModule();
   const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService);
 
   app.use(requestIdMiddleware, requestLoggerMiddleware);
+
+  const isProduction = config.get<string>('NODE_ENV') === 'production';
+  const corsOrigins = parseCorsOrigins(config.get<string>('CORS_ORIGINS'));
+  app.enableCors(buildCorsOptions(corsOrigins, isProduction));
+  new Logger('Bootstrap').log(describeCors(corsOrigins, isProduction));
+
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(createValidationPipe());
   app.enableShutdownHooks();
 
-  await app.listen(app.get(ConfigService).getOrThrow<number>('PORT'));
+  await app.listen(config.getOrThrow<number>('PORT'));
 }
 void bootstrap();
