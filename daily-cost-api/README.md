@@ -40,7 +40,7 @@ Create a `.env` file in the project root (it is git-ignored, never commit it):
 | `DB_NAME` | `dailycost` | |
 | `DB_PORT` | `5433` | Host port, so it doesn't clash with another local Postgres |
 | `DATABASE_URL` | `postgresql://dailycost:change-me@localhost:5433/dailycost?schema=public` | Must match the values above |
-| `JWT_ACCESS_SECRET` | *(long random string)* | Needed from the auth milestone |
+| `JWT_ACCESS_SECRET` | *(32+ random characters)* | Required, at least 32 characters |
 | `ACCESS_TOKEN_TTL_SECONDS` | `900` | |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | |
 | `PORT` | `3000` | Optional |
@@ -50,6 +50,8 @@ Generate a secret with:
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
+
+The API validates its configuration at startup. If a variable is missing or invalid it exits with code 1 and a message naming every problem (values are never printed). See `.env.example` for the full list, defaults and allowed ranges; the rules live in `src/config/env.validation.ts`.
 
 ## Scripts
 
