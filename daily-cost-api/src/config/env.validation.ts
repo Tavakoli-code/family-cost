@@ -3,13 +3,19 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   Matches,
   Max,
   Min,
   MinLength,
+  Validate,
   validateSync,
+  ValidationArguments,
   ValidationError,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
+import { normalizeOrigin, parseCorsOrigins } from './cors.config';
 
 const NODE_ENVS = ['development', 'production', 'test'];
 
@@ -19,11 +25,24 @@ const toNumber = ({ value }: { value: unknown }) =>
 const range = (min: number, max: number) =>
   `must be a whole number between ${min} and ${max}`;
 
-/**
- * Every setting the API reads at startup. Defaults apply when a variable is
- * absent; a variable that is present but blank or malformed is an error.
- * (DB_USER, DB_PASSWORD, DB_NAME and DB_PORT are only used by docker-compose.)
- */
+@ValidatorConstraint({ name: 'corsOrigins', async: false })
+class CorsOriginsConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && this.invalid(value).length === 0;
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    const bad = this.invalid(String(args.value)).join(', ');
+    return `invalid origin(s): ${bad}. Use a comma separated list of origins such as https://admin.example.com (scheme, host, optional port; no path, trailing slash or wildcard)`;
+  }
+
+  private invalid(value: string): string[] {
+    return parseCorsOrigins(value).filter(
+      (entry) => normalizeOrigin(entry) === null,
+    );
+  }
+}
+
 export class EnvironmentVariables {
   @IsIn(NODE_ENVS, { message: `must be one of: ${NODE_ENVS.join(', ')}` })
   NODE_ENV: string = 'development';
@@ -59,6 +78,10 @@ export class EnvironmentVariables {
   @Min(1, { message: range(1, 365) })
   @Max(365, { message: range(1, 365) })
   REFRESH_TOKEN_TTL_DAYS: number = 30;
+
+  @IsOptional()
+  @Validate(CorsOriginsConstraint)
+  CORS_ORIGINS?: string;
 }
 
 export class EnvValidationError extends Error {
