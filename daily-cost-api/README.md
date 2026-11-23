@@ -6,14 +6,14 @@ Backend for **Daily Cost**, an Android app (web admin planned) for tracking **fa
 
 ## Tech stack
 
-| Area | Choice |
-|---|---|
-| Framework | NestJS 12 (CommonJS), TypeScript |
-| Database | PostgreSQL 15, Prisma 6 |
+| Area           | Choice                                                                        |
+| -------------- | ----------------------------------------------------------------------------- |
+| Framework      | NestJS 12 (CommonJS), TypeScript                                              |
+| Database       | PostgreSQL 15, Prisma 6                                                       |
 | Auth (planned) | Phone or email + password (argon2), JWT access token, rotating refresh tokens |
-| Tests | Jest |
-| Local database | Docker Compose |
-| Push (planned) | Firebase Cloud Messaging |
+| Tests          | Jest                                                                          |
+| Local database | Docker Compose                                                                |
+| Push (planned) | Firebase Cloud Messaging                                                      |
 
 ## Requirements
 
@@ -33,18 +33,18 @@ npm run start:dev             # http://localhost:3000/api/v1
 
 Create a `.env` file in the project root (it is git-ignored, never commit it):
 
-| Variable | Example | Notes |
-|---|---|---|
-| `DB_USER` | `dailycost` | Used by `docker-compose.yml` |
-| `DB_PASSWORD` | `change-me` | Avoid `@` and `/`, or URL-encode them in `DATABASE_URL` |
-| `DB_NAME` | `dailycost` | |
-| `DB_PORT` | `5433` | Host port, so it doesn't clash with another local Postgres |
-| `DATABASE_URL` | `postgresql://dailycost:change-me@localhost:5433/dailycost?schema=public` | Must match the values above |
-| `JWT_ACCESS_SECRET` | *(32+ random characters)* | Required, at least 32 characters |
-| `ACCESS_TOKEN_TTL_SECONDS` | `900` | |
-| `REFRESH_TOKEN_TTL_DAYS` | `30` | |
-| `PORT` | `3000` | Optional |
-| `CORS_ORIGINS` | `http://localhost:5173` | Optional. Comma separated browser origins allowed to call the API (the web admin) |
+| Variable                   | Example                                                                   | Notes                                                                             |
+| -------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `DB_USER`                  | `dailycost`                                                               | Used by `docker-compose.yml`                                                      |
+| `DB_PASSWORD`              | `change-me`                                                               | Avoid `@` and `/`, or URL-encode them in `DATABASE_URL`                           |
+| `DB_NAME`                  | `dailycost`                                                               |                                                                                   |
+| `DB_PORT`                  | `5433`                                                                    | Host port, so it doesn't clash with another local Postgres                        |
+| `DATABASE_URL`             | `postgresql://dailycost:change-me@localhost:5433/dailycost?schema=public` | Must match the values above                                                       |
+| `JWT_ACCESS_SECRET`        | _(32+ random characters)_                                                 | Required, at least 32 characters                                                  |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900`                                                                     |                                                                                   |
+| `REFRESH_TOKEN_TTL_DAYS`   | `30`                                                                      |                                                                                   |
+| `PORT`                     | `3000`                                                                    | Optional                                                                          |
+| `CORS_ORIGINS`             | `http://localhost:5173`                                                   | Optional. Comma separated browser origins allowed to call the API (the web admin) |
 
 Generate a secret with:
 
@@ -63,17 +63,30 @@ The web admin runs in a browser, so its origin must be allowed. Set `CORS_ORIGIN
 - **The Android app is unaffected:** native clients send no `Origin` header.
 - Allowed request headers: `Authorization`, `Content-Type`, `X-Request-Id`. `X-Request-Id` is exposed to the browser, so the admin can show it in error messages. Cookies are not used (`credentials: false`).
 
+## Health Check
+
+`GET /health` is a public database readiness endpoint intended for hosting and container health checks.
+
+- Returns HTTP `200` with `{ "status": "ok", "database": "up" }` when PostgreSQL responds successfully.
+- Returns HTTP `503` with error code `SERVICE_UNAVAILABLE` when the database is unreachable or the check times out.
+- Does not require authentication.
+- Excluded from the `/api/v1` global prefix and response wrapper.
+- Retains the standard request ID header and request logging.
+- Runs a lightweight `SELECT 1` query with a 3-second application-level timeout.
+
+The endpoint checks API-to-database connectivity, not the status of migrations or every dependency. Use it for readiness monitoring rather than database-dependent liveness restarts.
+
 ## Scripts
 
-| Command | Purpose |
-|---|---|
-| `npm run start:dev` | Run with file watching |
-| `npm run build` | Compile to `dist/` |
-| `npm run start:prod` | Run the compiled build |
-| `npm test` | Unit tests |
-| `npm run test:cov` | Unit tests with coverage |
+| Command                                | Purpose                      |
+| -------------------------------------- | ---------------------------- |
+| `npm run start:dev`                    | Run with file watching       |
+| `npm run build`                        | Compile to `dist/`           |
+| `npm run start:prod`                   | Run the compiled build       |
+| `npm test`                             | Unit tests                   |
+| `npm run test:cov`                     | Unit tests with coverage     |
 | `npx prisma migrate dev --name <name>` | Create and apply a migration |
-| `npx prisma studio` | Browse the database |
+| `npx prisma studio`                    | Browse the database          |
 
 Database containers: `docker compose stop` / `start` keeps the data, `docker compose down -v` wipes it.
 
@@ -116,7 +129,15 @@ Success:
 Lists add pagination to `meta`:
 
 ```json
-{ "data": [ ], "meta": { "path": "/api/v1/transactions", "total": 120, "limit": 50, "offset": 0 } }
+{
+  "data": [],
+  "meta": {
+    "path": "/api/v1/transactions",
+    "total": 120,
+    "limit": 50,
+    "offset": 0
+  }
+}
 ```
 
 Errors (the HTTP status is always set to match):
@@ -153,14 +174,14 @@ Errors (the HTTP status is always set to match):
 
 ### Roles
 
-| Action | Owner | Admin | Member | Viewer |
-|---|---|---|---|---|
-| View data and reports | yes | yes | yes | yes |
-| Add transactions, edit own | yes | yes | yes | no |
-| Edit or delete anyone's | yes | yes | no | no |
-| Manage wallets and categories | yes | yes | no | no |
-| Invite and remove members | yes | yes | no | no |
-| Change roles, update or delete the family | yes | no | no | no |
+| Action                                    | Owner | Admin | Member | Viewer |
+| ----------------------------------------- | ----- | ----- | ------ | ------ |
+| View data and reports                     | yes   | yes   | yes    | yes    |
+| Add transactions, edit own                | yes   | yes   | yes    | no     |
+| Edit or delete anyone's                   | yes   | yes   | no     | no     |
+| Manage wallets and categories             | yes   | yes   | no     | no     |
+| Invite and remove members                 | yes   | yes   | no     | no     |
+| Change roles, update or delete the family | yes   | no    | no     | no     |
 
 ## Testing
 

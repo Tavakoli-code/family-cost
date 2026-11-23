@@ -4,8 +4,12 @@ import { EnvValidationError } from './config/env.validation';
 import { createValidationPipe } from './common/pipes/app-validation.pipe';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { requestLoggerMiddleware } from './common/middleware/request-logger.middleware';
-import { buildCorsOptions, describeCors, parseCorsOrigins } from './config/cors.config';
-import { Logger } from '@nestjs/common';
+import {
+  buildCorsOptions,
+  describeCors,
+  parseCorsOrigins,
+} from './config/cors.config';
+import { Logger, RequestMethod } from '@nestjs/common';
 
 async function loadAppModule() {
   try {
@@ -34,7 +38,9 @@ async function bootstrap() {
   app.enableCors(buildCorsOptions(corsOrigins, isProduction));
   new Logger('Bootstrap').log(describeCors(corsOrigins, isProduction));
 
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: [{ path: '/health', method: RequestMethod.GET }],
+  });
   app.useGlobalPipes(createValidationPipe());
   app.enableShutdownHooks();
 
