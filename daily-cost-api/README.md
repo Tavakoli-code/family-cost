@@ -44,6 +44,7 @@ Create a `.env` file in the project root (it is git-ignored, never commit it):
 | `ACCESS_TOKEN_TTL_SECONDS` | `900` | |
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | |
 | `PORT` | `3000` | Optional |
+| `CORS_ORIGINS` | `http://localhost:5173` | Optional. Comma separated browser origins allowed to call the API (the web admin) |
 
 Generate a secret with:
 
@@ -52,6 +53,15 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
 The API validates its configuration at startup. If a variable is missing or invalid it exits with code 1 and a message naming every problem (values are never printed). See `.env.example` for the full list, defaults and allowed ranges; the rules live in `src/config/env.validation.ts`.
+
+## CORS
+
+The web admin runs in a browser, so its origin must be allowed. Set `CORS_ORIGINS` to a comma separated list of exact origins (`https://admin.example.com`, no path, no trailing slash, no wildcard). Invalid entries stop the API at startup.
+
+- **Production:** only the listed origins get CORS headers. Unknown origins are not rejected with an error; the response simply has no `Access-Control-*` headers, so the browser blocks the call. An empty list means no browser origin is allowed.
+- **Development:** when the list is empty, any `localhost` or `127.0.0.1` origin is allowed.
+- **The Android app is unaffected:** native clients send no `Origin` header.
+- Allowed request headers: `Authorization`, `Content-Type`, `X-Request-Id`. `X-Request-Id` is exposed to the browser, so the admin can show it in error messages. Cookies are not used (`credentials: false`).
 
 ## Scripts
 
