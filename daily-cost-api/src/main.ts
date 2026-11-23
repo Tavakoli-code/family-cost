@@ -10,6 +10,7 @@ import {
   parseCorsOrigins,
 } from './config/cors.config';
 import { Logger, RequestMethod } from '@nestjs/common';
+import { setupSwagger, shouldEnableSwagger } from './config/swagger.config';
 
 async function loadAppModule() {
   try {
@@ -43,6 +44,12 @@ async function bootstrap() {
   });
   app.useGlobalPipes(createValidationPipe());
   app.enableShutdownHooks();
+
+  const nodeEnv = config.get<string>('NODE_ENV');
+
+  if (shouldEnableSwagger(nodeEnv)) {
+    setupSwagger(app);
+  }
 
   await app.listen(config.getOrThrow<number>('PORT'));
 }
