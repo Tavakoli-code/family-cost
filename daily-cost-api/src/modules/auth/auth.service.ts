@@ -14,6 +14,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordService } from './password.service';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Injectable()
 export class AuthService {
@@ -93,6 +94,126 @@ export class AuthService {
 
   async resendVerification(dto: ResendVerificationDto) {
     await this.verification.resend(dto.email);
+    return { success: true };
+  }
+
+  async refresh(dto: RefreshTokenDto) {
+    const tokenHash = sha256Hex(dto.refreshToken);
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const stored = await tx.refreshToken.findUnique({
+        where: { tokenHash },
+        include: {
+          user: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (!stored) {
+        return { kind: 'invalid' as const };
+      }
+
+      if (stored.revokedAt !== null) {
+        await tx.refreshToken.updateMany({
+          where: {
+            userId: stored.userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: now,
+          },
+        });
+
+        return { kind: 'reused' as const };
+      }
+
+      if (
+        stored.expiresAt <= now ||
+        stored.user.status !== RecordStatus.ACTIVE
+      ) {
+        return { kind: 'invalid' as const };
+      }
+
+      // Conditional update: only one concurrent request can
+      // consume an active refresh token successfully.
+      const consumed = await tx.refreshToken.updateMany({
+        where: {
+          id: stored.id,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      if (consumed.count !== 1) {
+        await tx.refreshToken.updateMany({
+          where: {
+            userId: stored.userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: now,
+          },
+        });
+
+        return { kind: 'reused' as const };
+      }
+
+      const nextRefreshToken = randomBytes(48).toString('base64url');
+
+      const ttlDays = this.config.getOrThrow<number>('REFRESH_TOKEN_TTL_DAYS');
+
+      await tx.refreshToken.create({
+        data: {
+          userId: stored.userId,
+          tokenHash: sha256Hex(nextRefreshToken),
+          expiresAt: new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      return {
+        kind: 'success' as const,
+        userId: stored.userId,
+        refreshToken: nextRefreshToken,
+      };
+    });
+
+    if (result.kind !== 'success') {
+      throw new AppException(
+        ErrorCode.UNAUTHORIZED,
+        'Invalid or expired refresh token',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const accessToken = await this.jwt.signAsync({
+      sub: result.userId,
+    });
+
+    return {
+      accessToken,
+      refreshToken: result.refreshToken,
+    };
+  }
+
+  async logout(dto: RefreshTokenDto) {
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        tokenHash: sha256Hex(dto.refreshToken),
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
     return { success: true };
   }
 

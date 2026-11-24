@@ -13,6 +13,8 @@ import {
   ApiResendVerification,
   ApiVerifyEmail,
 } from './docs/auth.docs';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiAuthController()
 @Controller('auth')
@@ -44,5 +46,19 @@ export class AuthController {
   @ApiResendVerification()
   resendVerification(@Body() dto: ResendVerificationDto) {
     return this.auth.resendVerification(dto);
+  }
+
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.auth.refresh(dto);
+  }
+
+  @Public()
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Body() dto: RefreshTokenDto) {
+    return this.auth.logout(dto);
   }
 }

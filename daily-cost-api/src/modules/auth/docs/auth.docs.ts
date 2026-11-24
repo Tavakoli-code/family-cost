@@ -15,6 +15,7 @@ import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ResendVerificationDto } from '../dto/resend-verification.dto';
 import { VerifyEmailDto } from '../dto/verify-email.dto';
+import { RefreshTokenDto } from '../dto/refresh-token.dto';
 
 // -----------------------------------------------------
 // Shared documentation helpers
@@ -236,5 +237,74 @@ export const ApiResendVerification = () =>
     }),
     ApiBadRequestResponse({
       description: 'Invalid resend request.',
+    }),
+  );
+
+export const ApiRefresh = () =>
+  applyDecorators(
+    ApiOperation({
+      summary: 'Rotate refresh token',
+      description:
+        'Exchanges a valid refresh token for a new access ' +
+        'token and refresh token. The previous refresh token ' +
+        'is revoked. Reusing a revoked token revokes all ' +
+        'active refresh sessions belonging to the user.',
+    }),
+    ApiBody({
+      type: RefreshTokenDto,
+    }),
+    ApiOkResponse({
+      description: 'Token rotation successful.',
+      schema: {
+        example: {
+          data: {
+            accessToken: '<jwt-access-token>',
+            refreshToken: '<new-opaque-refresh-token>',
+          },
+          meta: {
+            path: '/api/v1/auth/refresh',
+          },
+        },
+      },
+    }),
+    ApiUnauthorizedResponse({
+      description: 'Invalid, expired or reused refresh token.',
+      schema: {
+        example: {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid or expired refresh token',
+            path: '/api/v1/auth/refresh',
+            requestId: 'req-example-123',
+          },
+        },
+      },
+    }),
+  );
+
+export const ApiLogout = () =>
+  applyDecorators(
+    ApiOperation({
+      summary: 'Log out a session',
+      description:
+        'Revokes the submitted refresh token. Repeated ' +
+        'logout requests return success. Other sessions ' +
+        'are not affected by normal logout.',
+    }),
+    ApiBody({
+      type: RefreshTokenDto,
+    }),
+    ApiOkResponse({
+      description: 'Logout processed successfully.',
+      schema: {
+        example: {
+          data: {
+            success: true,
+          },
+          meta: {
+            path: '/api/v1/auth/logout',
+          },
+        },
+      },
     }),
   );
