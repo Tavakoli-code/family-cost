@@ -152,3 +152,68 @@ describe('CORS_ORIGINS', () => {
     expect(message).not.toContain('https://ok.example.com,');
   });
 });
+
+describe('mail settings', () => {
+  it('has development defaults (Mailpit)', () => {
+    const env = validateEnv(base);
+    expect(env.MAIL_PORT).toBe(1025);
+    expect(env.MAIL_SECURE).toBe(false);
+    expect(env.MAIL_FROM).toContain('no-reply@');
+    expect(env.EMAIL_CODE_TTL_MINUTES).toBe(15);
+  });
+
+  it('requires MAIL_HOST in production only', () => {
+    expect(failure({ ...base, NODE_ENV: 'production' }).message).toContain(
+      'MAIL_HOST: is required in production',
+    );
+    expect(() =>
+      validateEnv({
+        ...base,
+        NODE_ENV: 'production',
+        MAIL_HOST: 'smtp.example.com',
+      }),
+    ).not.toThrow();
+    expect(() => validateEnv(base)).not.toThrow();
+  });
+
+  it('treats blank MAIL_USER and MAIL_PASSWORD as not set', () => {
+    const env = validateEnv({ ...base, MAIL_USER: '', MAIL_PASSWORD: ' ' });
+    expect(env.MAIL_USER).toBeUndefined();
+    expect(env.MAIL_PASSWORD).toBeUndefined();
+  });
+
+  it('accepts true and false for MAIL_SECURE and rejects other spellings', () => {
+    expect(validateEnv({ ...base, MAIL_SECURE: 'true' }).MAIL_SECURE).toBe(
+      true,
+    );
+    expect(validateEnv({ ...base, MAIL_SECURE: 'false' }).MAIL_SECURE).toBe(
+      false,
+    );
+    for (const bad of ['yes', '1', 'TRUE']) {
+      expect(failure({ ...base, MAIL_SECURE: bad }).message).toContain(
+        'MAIL_SECURE:',
+      );
+    }
+  });
+
+  it('accepts MAIL_FROM with a display name and rejects malformed values', () => {
+    expect(() =>
+      validateEnv({ ...base, MAIL_FROM: 'Daily Cost <a@b.com>' }),
+    ).not.toThrow();
+    for (const bad of [
+      'not an email',
+      'Name <bad>',
+      'a@b.com\r\nBcc: x@y.com',
+    ]) {
+      expect(failure({ ...base, MAIL_FROM: bad }).message).toContain(
+        'MAIL_FROM:',
+      );
+    }
+  });
+
+  it.each(['0', '61', 'soon'])('rejects EMAIL_CODE_TTL_MINUTES=%p', (value) => {
+    expect(
+      failure({ ...base, EMAIL_CODE_TTL_MINUTES: value }).message,
+    ).toContain('EMAIL_CODE_TTL_MINUTES:');
+  });
+});

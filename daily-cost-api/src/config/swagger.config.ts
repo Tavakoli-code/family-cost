@@ -34,6 +34,7 @@ export function setupSwagger(app: INestApplication): void {
     useGlobalPrefix: false,
     jsonDocumentUrl: '/api/docs-json',
     swaggerOptions: {
+      docExpansion: 'none',
       persistAuthorization: false,
     },
   });

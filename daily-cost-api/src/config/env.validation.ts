@@ -1,14 +1,17 @@
 import { plainToInstance, Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsString,
   Matches,
   Max,
   Min,
   MinLength,
   Validate,
+  ValidateIf,
   validateSync,
   ValidationArguments,
   ValidationError,
@@ -24,6 +27,15 @@ const toNumber = ({ value }: { value: unknown }) =>
 
 const range = (min: number, max: number) =>
   `must be a whole number between ${min} and ${max}`;
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
+const toBoolean = ({ value }: { value: unknown }) =>
+  value === 'true' ? true : value === 'false' ? false : value;
+
+const MAIL_FROM_PATTERN =
+  /^(?:[^<>@\r\n]+<[^\s<>@]+@[^\s<>@]+>|[^\s<>@]+@[^\s<>@]+)$/;
 
 @ValidatorConstraint({ name: 'corsOrigins', async: false })
 class CorsOriginsConstraint implements ValidatorConstraintInterface {
@@ -82,6 +94,44 @@ export class EnvironmentVariables {
   @IsOptional()
   @Validate(CorsOriginsConstraint)
   CORS_ORIGINS?: string;
+
+  // Required in production. In development the mail service falls back to
+  // localhost (Mailpit).
+  @ValidateIf((env: EnvironmentVariables) => env.NODE_ENV === 'production')
+  @IsNotEmpty({ message: 'is required in production' })
+  MAIL_HOST?: string;
+
+  @Transform(toNumber)
+  @IsInt({ message: range(1, 65535) })
+  @Min(1, { message: range(1, 65535) })
+  @Max(65535, { message: range(1, 65535) })
+  MAIL_PORT: number = 1025;
+
+  @Matches(MAIL_FROM_PATTERN, {
+    message: 'must be an email address or "Name <address>"',
+  })
+  MAIL_FROM: string = 'Daily Cost <no-reply@dailycost.local>';
+
+  /** true for implicit TLS (port 465). Port 587 uses STARTTLS with false. */
+  @Transform(toBoolean)
+  @IsBoolean({ message: 'must be true or false' })
+  MAIL_SECURE: boolean = false;
+
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  MAIL_USER?: string;
+
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  MAIL_PASSWORD?: string;
+
+  @Transform(toNumber)
+  @IsInt({ message: range(1, 60) })
+  @Min(1, { message: range(1, 60) })
+  @Max(60, { message: range(1, 60) })
+  EMAIL_CODE_TTL_MINUTES: number = 15;
 }
 
 export class EnvValidationError extends Error {

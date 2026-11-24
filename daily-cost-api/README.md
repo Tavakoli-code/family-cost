@@ -289,3 +289,18 @@ Shared utilities are implemented in `src/common/utils/`.
 - `createOptionalUtcDateRange()`
 
 All monetary and date helpers are pure functions, independent of NestJS, Prisma, and HTTP request handling.
+
+## Authentication
+
+Accounts use **email and password**. Passwords are hashed with argon2id.
+
+| Endpoint                         | Purpose                                                                                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/register`            | Create an account (`fullName`, `email`, `password`, optional `language` fa/ps/en). Returns the user with `emailVerified: false`, and emails a 6-digit code. No tokens yet. |
+| `POST /auth/verify-email`        | `{ email, code }`. The code expires after `EMAIL_CODE_TTL_MINUTES` (default 15) and allows 5 wrong attempts.                                                               |
+| `POST /auth/resend-verification` | `{ email }`. Always answers 200; sends a new code at most once per minute.                                                                                                 |
+| `POST /auth/login`               | `{ email, password }`. Returns `user`, `accessToken` and `refreshToken`.                                                                                                   |
+
+Error codes the apps handle: `ALREADY_EXISTS` (409, email taken), `INVALID_CREDENTIALS` (401, wrong email or password; this is _not_ an expired token), `EMAIL_NOT_VERIFIED` (403, ask for the code), `VERIFICATION_CODE_INVALID` (400, wrong code) and `VERIFICATION_CODE_EXPIRED` (400, request a new code).
+
+The verification email is written in the user's language (Dari, Pashto or English). Local development sends mail to Mailpit; production needs a real SMTP server (`MAIL_HOST` and friends).
