@@ -68,4 +68,18 @@ describe('requestLoggerMiddleware', () => {
     run(200, null).res.emit('finish');
     expect(log.mock.calls[0][0]).toContain('requestId=-');
   });
+
+  it('adds the user id for authenticated requests', () => {
+    const req = {
+      method: 'GET',
+      url: '/x',
+      originalUrl: '/api/v1/x',
+      requestId: 'req-1',
+      user: { id: 'user-1' },
+    } as unknown as RequestWithId;
+    const res = Object.assign(new EventEmitter(), { statusCode: 200 }) as unknown as Response;
+    requestLoggerMiddleware(req, res, jest.fn() as unknown as NextFunction);
+    res.emit('finish');
+    expect(log.mock.calls[0][0]).toMatch(/requestId=req-1 userId=user-1$/);
+  });
 });

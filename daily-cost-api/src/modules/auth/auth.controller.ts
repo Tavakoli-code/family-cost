@@ -21,12 +21,14 @@ import { Public } from '../../common/decorators/public.decorator';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Public()
   @Post('register')
   @ApiRegister()
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiLogin()
@@ -34,6 +36,7 @@ export class AuthController {
     return this.auth.login(dto);
   }
 
+  @Public()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiVerifyEmail()
@@ -41,6 +44,7 @@ export class AuthController {
     return this.auth.verifyEmail(dto);
   }
 
+  @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiResendVerification()
