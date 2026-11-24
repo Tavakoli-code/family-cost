@@ -228,6 +228,19 @@ The intended contract is:
 
 **Security limitations:** Revoking a refresh token does not immediately revoke previously issued stateless access JWTs; those remain valid until their expiration unless separate access-token revocation is implemented. Android clients should serialize concurrent refresh requests to avoid self-triggered reuse detection. Token rotation and replay handling must be tested against PostgreSQL for concurrency and rollback behavior before considering #12 complete.
 
+### Calling protected routes
+
+Every route requires `Authorization: Bearer <accessToken>` unless the handler is marked `@Public()` (currently the auth endpoints and the health check). A route added later is private by default.
+
+| Response | Code | What the app does |
+|---|---|---|
+| 401 | `TOKEN_EXPIRED` | The access token is past its lifetime: call refresh, then retry the request once |
+| 401 | `UNAUTHORIZED` | Missing, invalid or revoked credentials, or the account is disabled: sign the user out |
+
+Access tokens are short-lived and stateless; signing out revokes the refresh token. The account is checked on every request, so a disabled user is locked out immediately.
+
+For developers: `@CurrentUser() user: AuthUser` (or `@CurrentUser('id') id: string`) gives the authenticated user inside a handler, and `@Public()` opts a handler out of the guard.
+
 ## Health and API documentation
 
 ### Health
