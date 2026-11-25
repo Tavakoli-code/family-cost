@@ -10,11 +10,19 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { APP_GUARD } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
+import { buildAuthThrottleOptions } from '../../config/auth-throttle.config';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
     MailModule,
     PassportModule,
+
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => buildAuthThrottleOptions(config),
+    }),
+
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -26,6 +34,12 @@ import { PassportModule } from '@nestjs/passport';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, EmailVerificationService, JwtStrategy, { provide: APP_GUARD, useClass: JwtAuthGuard },],
+  providers: [
+    AuthService,
+    PasswordService,
+    EmailVerificationService,
+    JwtStrategy,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+  ],
 })
 export class AuthModule {}
