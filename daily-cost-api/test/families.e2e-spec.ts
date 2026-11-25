@@ -276,7 +276,10 @@ describeWithPostgres('Family endpoints (PostgreSQL)', () => {
       archivedFamilyId = (
         await service.create(readerId, { name: 'Already archived' })
       ).id;
-      await service.archive(readerId, archivedFamilyId);
+      await prisma.family.update({
+        where: { id: archivedFamilyId },
+        data: { status: RecordStatus.INACTIVE },
+      });
     });
 
     afterAll(async () => {
@@ -341,6 +344,32 @@ describeWithPostgres('Family endpoints (PostgreSQL)', () => {
           .expect(403);
       },
     );
+
+    it('reuses the verified membership for details and a successful update', async () => {
+      const lookup = jest.spyOn(prisma.member, 'findUnique');
+      const fallback = jest.spyOn(prisma.member, 'findFirst');
+      try {
+        const url = `${path}/${readerFamilyId}`;
+        await http()
+          .get(url)
+          .set('Authorization', readerAuthorization)
+          .expect(200);
+        expect(lookup).toHaveBeenCalledTimes(1);
+        expect(fallback).not.toHaveBeenCalled();
+
+        lookup.mockClear();
+        await http()
+          .patch(url)
+          .set('Authorization', readerAuthorization)
+          .send({ name: 'Verified owner' })
+          .expect(200);
+        expect(lookup).toHaveBeenCalledTimes(1);
+        expect(fallback).not.toHaveBeenCalled();
+      } finally {
+        lookup.mockRestore();
+        fallback.mockRestore();
+      }
+    });
 
     it('hides private, removed, archived, and missing families for all detail operations', async () => {
       for (const id of [
