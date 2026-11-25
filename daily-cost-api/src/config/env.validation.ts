@@ -132,6 +132,18 @@ export class EnvironmentVariables {
   @Min(1, { message: range(1, 60) })
   @Max(60, { message: range(1, 60) })
   EMAIL_CODE_TTL_MINUTES: number = 15;
+
+  @Transform(toNumber)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  AUTH_RATE_LIMIT: number = 10;
+
+  @Transform(toNumber)
+  @IsInt()
+  @Min(1)
+  @Max(3600)
+  AUTH_RATE_WINDOW_SECONDS: number = 60;
 }
 
 export class EnvValidationError extends Error {

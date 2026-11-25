@@ -232,14 +232,45 @@ The intended contract is:
 
 Every route requires `Authorization: Bearer <accessToken>` unless the handler is marked `@Public()` (currently the auth endpoints and the health check). A route added later is private by default.
 
-| Response | Code | What the app does |
-|---|---|---|
-| 401 | `TOKEN_EXPIRED` | The access token is past its lifetime: call refresh, then retry the request once |
-| 401 | `UNAUTHORIZED` | Missing, invalid or revoked credentials, or the account is disabled: sign the user out |
+| Response | Code            | What the app does                                                                      |
+| -------- | --------------- | -------------------------------------------------------------------------------------- |
+| 401      | `TOKEN_EXPIRED` | The access token is past its lifetime: call refresh, then retry the request once       |
+| 401      | `UNAUTHORIZED`  | Missing, invalid or revoked credentials, or the account is disabled: sign the user out |
 
 Access tokens are short-lived and stateless; signing out revokes the refresh token. The account is checked on every request, so a disabled user is locked out immediately.
 
 For developers: `@CurrentUser() user: AuthUser` (or `@CurrentUser('id') id: string`) gives the authenticated user inside a handler, and `@Public()` opts a handler out of the guard.
+
+### Authentication Rate Limiting
+
+Daily Cost uses `@nestjs/throttler` to reduce authentication abuse and repeated password guessing.
+
+The following endpoints are rate limited:
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+
+Rate limits are tracked per client IP and endpoint.
+
+The default configuration allows 10 requests per 60 seconds.
+
+Configure the limits through environment variables:
+
+```dotenv
+AUTH_RATE_LIMIT=10
+AUTH_RATE_WINDOW_SECONDS=60
+```
+
+Both variables are validated at application startup.
+
+When a client exceeds the configured limit, the API returns HTTP `429 Too Many Requests` using the standard error envelope with error code `TOO_MANY_REQUESTS` and a request ID.
+
+The rate limiter uses in-memory storage for the initial single-instance deployment. Production deployments with multiple API instances require shared rate-limit storage.
+
+Reverse-proxy IP handling must be configured for the actual trusted infrastructure. Untrusted client-supplied forwarding headers must not determine rate-limit identity.
+
+The rate limiter does not change authentication credentials, JWT expiration, refresh token rotation, or logout behavior.
 
 ## Health and API documentation
 

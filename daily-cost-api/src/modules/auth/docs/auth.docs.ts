@@ -16,6 +16,7 @@ import { RegisterDto } from '../dto/register.dto';
 import { ResendVerificationDto } from '../dto/resend-verification.dto';
 import { VerifyEmailDto } from '../dto/verify-email.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
+import { ApiTooManyRequestsResponse } from '@nestjs/swagger';
 
 // -----------------------------------------------------
 // Shared documentation helpers
@@ -107,6 +108,7 @@ export const ApiRegister = () =>
         },
       },
     }),
+    ApiAuthRateLimited(),
   );
 
 // -----------------------------------------------------
@@ -170,6 +172,7 @@ export const ApiLogin = () =>
         },
       },
     }),
+    ApiAuthRateLimited(),
   );
 
 // -----------------------------------------------------
@@ -280,6 +283,7 @@ export const ApiRefresh = () =>
         },
       },
     }),
+    ApiAuthRateLimited(),
   );
 
 export const ApiLogout = () =>
@@ -303,6 +307,25 @@ export const ApiLogout = () =>
           },
           meta: {
             path: '/api/v1/auth/logout',
+          },
+        },
+      },
+    }),
+  );
+
+export const ApiAuthRateLimited = () =>
+  applyDecorators(
+    ApiTooManyRequestsResponse({
+      description:
+        'Authentication request limit exceeded. ' +
+        'Retry after the rate-limit window permits another request.',
+      schema: {
+        example: {
+          error: {
+            code: 'TOO_MANY_REQUESTS',
+            message: 'Too many requests',
+            path: '/api/v1/auth/login',
+            requestId: 'req-example-123',
           },
         },
       },
