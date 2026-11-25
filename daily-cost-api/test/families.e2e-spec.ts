@@ -333,15 +333,22 @@ describeWithPostgres('Family endpoints (PostgreSQL)', () => {
           data: expect.objectContaining({ id: familyId, role }),
           meta: { path: url },
         });
-        await http()
+        const update = await http()
           .patch(url)
           .set('Authorization', readerAuthorization)
           .send({ name: 'Denied' })
           .expect(403);
-        await http()
+        const archive = await http()
           .delete(url)
           .set('Authorization', readerAuthorization)
           .expect(403);
+        for (const response of [update, archive]) {
+          expect(response.body.error).toMatchObject({
+            code: 'FORBIDDEN',
+            message: 'Insufficient permissions',
+            path: url,
+          });
+        }
       },
     );
 
