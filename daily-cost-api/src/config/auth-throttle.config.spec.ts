@@ -24,6 +24,7 @@ describe('buildAuthThrottleOptions', () => {
           ttl: 60_000,
         },
       ],
+      errorMessage: 'Too many requests',
     });
   });
 
