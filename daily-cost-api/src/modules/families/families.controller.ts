@@ -1,13 +1,7 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post } from '@nestjs/common';
+import { CurrentFamilyMembership } from '../../common/decorators/current-family-membership.decorator';
+import { FamilyScoped } from '../../common/decorators/family-scoped.decorator';
+import type { FamilyMembershipContext } from '../../common/types/family-membership-context.type';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiArchiveFamily,
@@ -39,30 +33,26 @@ export class FamiliesController {
   }
 
   @Get(':familyId')
+  @FamilyScoped()
   @ApiGetFamily()
-  get(
-    @CurrentUser('id') userId: string,
-    @Param('familyId', ParseUUIDPipe) familyId: string,
-  ) {
-    return this.families.get(userId, familyId);
+  get(@CurrentFamilyMembership() { family, role }: FamilyMembershipContext) {
+    return { ...family, role };
   }
 
   @Patch(':familyId')
+  @FamilyScoped()
   @ApiUpdateFamily()
   update(
-    @CurrentUser('id') userId: string,
-    @Param('familyId', ParseUUIDPipe) familyId: string,
+    @CurrentFamilyMembership() membership: FamilyMembershipContext,
     @Body() input: UpdateFamilyDto,
   ) {
-    return this.families.update(userId, familyId, input);
+    return this.families.update(membership, input);
   }
 
   @Delete(':familyId')
+  @FamilyScoped()
   @ApiArchiveFamily()
-  archive(
-    @CurrentUser('id') userId: string,
-    @Param('familyId', ParseUUIDPipe) familyId: string,
-  ) {
-    return this.families.archive(userId, familyId);
+  archive(@CurrentFamilyMembership() membership: FamilyMembershipContext) {
+    return this.families.archive(membership);
   }
 }
