@@ -217,3 +217,47 @@ describe('mail settings', () => {
     ).toContain('EMAIL_CODE_TTL_MINUTES:');
   });
 });
+
+describe('Auth rate limiting', () => {
+  it('uses default settings', () => {
+    const env = validateEnv(base);
+
+    expect(env.AUTH_RATE_LIMIT).toBe(10);
+    expect(env.AUTH_RATE_WINDOW_SECONDS).toBe(60);
+  });
+
+  it('converts configured values to numbers', () => {
+    const env = validateEnv({
+      ...base,
+      AUTH_RATE_LIMIT: '5',
+      AUTH_RATE_WINDOW_SECONDS: '120',
+    });
+
+    expect(env.AUTH_RATE_LIMIT).toBe(5);
+    expect(env.AUTH_RATE_WINDOW_SECONDS).toBe(120);
+  });
+
+  it.each(['0', '-1', '1001', 'abc', '1.5', ''])(
+    'rejects invalid AUTH_RATE_LIMIT=%p',
+    (value) => {
+      expect(() =>
+        validateEnv({
+          ...base,
+          AUTH_RATE_LIMIT: value,
+        }),
+      ).toThrow();
+    },
+  );
+
+  it.each(['0', '-1', '3601', 'abc', '1.5', ''])(
+    'rejects invalid AUTH_RATE_WINDOW_SECONDS=%p',
+    (value) => {
+      expect(() =>
+        validateEnv({
+          ...base,
+          AUTH_RATE_WINDOW_SECONDS: value,
+        }),
+      ).toThrow();
+    },
+  );
+});
