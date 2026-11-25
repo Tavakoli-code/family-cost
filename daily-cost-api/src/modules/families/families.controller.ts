@@ -1,4 +1,6 @@
 import { Body, Controller, Delete, Get, Patch, Post } from '@nestjs/common';
+import { Permission } from '../../common/constants/permissions';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentFamilyMembership } from '../../common/decorators/current-family-membership.decorator';
 import { FamilyScoped } from '../../common/decorators/family-scoped.decorator';
 import type { FamilyMembershipContext } from '../../common/types/family-membership-context.type';
@@ -34,6 +36,7 @@ export class FamiliesController {
 
   @Get(':familyId')
   @FamilyScoped()
+  @RequirePermissions(Permission.FAMILY_VIEW)
   @ApiGetFamily()
   get(@CurrentFamilyMembership() { family, role }: FamilyMembershipContext) {
     return { ...family, role };
@@ -41,6 +44,7 @@ export class FamiliesController {
 
   @Patch(':familyId')
   @FamilyScoped()
+  @RequirePermissions(Permission.FAMILY_UPDATE)
   @ApiUpdateFamily()
   update(
     @CurrentFamilyMembership() membership: FamilyMembershipContext,
@@ -51,6 +55,7 @@ export class FamiliesController {
 
   @Delete(':familyId')
   @FamilyScoped()
+  @RequirePermissions(Permission.FAMILY_ARCHIVE)
   @ApiArchiveFamily()
   archive(@CurrentFamilyMembership() membership: FamilyMembershipContext) {
     return this.families.archive(membership);
