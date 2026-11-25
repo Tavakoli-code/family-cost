@@ -5,7 +5,12 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { Test } from '@nestjs/testing';
-import { CategoryType } from '@prisma/client';
+import {
+  CategoryType,
+  FamilyRole,
+  MemberStatus,
+  RecordStatus,
+} from '@prisma/client';
 import request from 'supertest';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
@@ -42,7 +47,7 @@ const expectedKeys = {
   INCOME: ['salary', 'business', 'remittance', 'gift', 'income_other'],
 };
 
-describeWithPostgres('Family creation (PostgreSQL)', () => {
+describeWithPostgres('Family endpoints (PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let service: FamiliesService;
@@ -218,5 +223,274 @@ describeWithPostgres('Family creation (PostgreSQL)', () => {
       await prisma.$executeRaw`DROP TRIGGER IF EXISTS reject_test_family_categories ON categories`;
       await prisma.$executeRaw`DROP FUNCTION reject_test_family_categories()`;
     }
+  });
+
+  describe('family access and changes', () => {
+    const readerId = randomUUID();
+    const jwt = new JwtService({ secret });
+    const readerAuthorization = `Bearer ${jwt.sign({ sub: readerId })}`;
+    const memberRoles = [
+      FamilyRole.ADMIN,
+      FamilyRole.MEMBER,
+      FamilyRole.VIEWER,
+    ];
+    const memberFamilies = new Map<FamilyRole, string>();
+    let readerFamilyId: string;
+    let privateFamilyId: string;
+    let removedFamilyId: string;
+    let archivedFamilyId: string;
+
+    const http = () => request(app.getHttpServer());
+
+    beforeAll(async () => {
+      await prisma.user.create({
+        data: {
+          id: readerId,
+          fullName: 'Reader',
+          email: `${readerId}@example.com`,
+          passwordHash: 'unused',
+        },
+      });
+      readerFamilyId = (await service.create(readerId, { name: 'Reader owns' }))
+        .id;
+      privateFamilyId = (await service.create(userId, { name: 'Private' })).id;
+      for (const role of memberRoles) {
+        const family = await service.create(userId, {
+          name: `Reader is ${role}`,
+        });
+        memberFamilies.set(role, family.id);
+        await prisma.member.create({
+          data: { familyId: family.id, userId: readerId, role },
+        });
+      }
+      removedFamilyId = (
+        await service.create(userId, { name: 'Former membership' })
+      ).id;
+      await prisma.member.create({
+        data: {
+          familyId: removedFamilyId,
+          userId: readerId,
+          status: MemberStatus.REMOVED,
+        },
+      });
+      archivedFamilyId = (
+        await service.create(readerId, { name: 'Already archived' })
+      ).id;
+      await service.archive(readerId, archivedFamilyId);
+    });
+
+    afterAll(async () => {
+      if (!readerFamilyId) return;
+      await prisma.transaction.deleteMany({
+        where: { family: { ownerId: readerId } },
+      });
+      await prisma.family.deleteMany({ where: { ownerId: readerId } });
+      await prisma.user.deleteMany({ where: { id: readerId } });
+    });
+
+    it('requires a JWT for the list, detail, update, and archive endpoints', async () => {
+      await http().get(path).expect(401);
+      await http().get(`${path}/${readerFamilyId}`).expect(401);
+      await http()
+        .patch(`${path}/${readerFamilyId}`)
+        .send({ name: 'Changed' })
+        .expect(401);
+      await http().delete(`${path}/${readerFamilyId}`).expect(401);
+    });
+
+    it('lists only active memberships in active families and includes each role', async () => {
+      const { body } = await http()
+        .get(path)
+        .set('Authorization', readerAuthorization)
+        .expect(200);
+      expect(body.meta).toEqual({ path });
+      const entries = body.data as { id: string; role: FamilyRole }[];
+      expect(entries.map(({ id, role }) => ({ id, role }))).toEqual(
+        expect.arrayContaining([
+          { id: readerFamilyId, role: FamilyRole.OWNER },
+          ...memberRoles.map((role) => ({
+            id: memberFamilies.get(role),
+            role,
+          })),
+        ]),
+      );
+      expect(body.data).toHaveLength(4);
+    });
+
+    it.each(memberRoles)(
+      'allows %s to read details but forbids update and archive',
+      async (role) => {
+        const familyId = memberFamilies.get(role);
+        const url = `${path}/${familyId}`;
+        const { body } = await http()
+          .get(url)
+          .set('Authorization', readerAuthorization)
+          .expect(200);
+        expect(body).toEqual({
+          data: expect.objectContaining({ id: familyId, role }),
+          meta: { path: url },
+        });
+        await http()
+          .patch(url)
+          .set('Authorization', readerAuthorization)
+          .send({ name: 'Denied' })
+          .expect(403);
+        await http()
+          .delete(url)
+          .set('Authorization', readerAuthorization)
+          .expect(403);
+      },
+    );
+
+    it('hides private, removed, archived, and missing families for all detail operations', async () => {
+      for (const id of [
+        privateFamilyId,
+        removedFamilyId,
+        archivedFamilyId,
+        randomUUID(),
+      ]) {
+        const url = `${path}/${id}`;
+        await http()
+          .get(url)
+          .set('Authorization', readerAuthorization)
+          .expect(404);
+        await http()
+          .patch(url)
+          .set('Authorization', readerAuthorization)
+          .send({ name: 'Hidden' })
+          .expect(404);
+        await http()
+          .delete(url)
+          .set('Authorization', readerAuthorization)
+          .expect(404);
+      }
+      await http()
+        .get(`${path}/invalid-id`)
+        .set('Authorization', readerAuthorization)
+        .expect(400);
+    });
+
+    it('updates an owned family and preserves omitted values', async () => {
+      const url = `${path}/${readerFamilyId}`;
+      const { body } = await http()
+        .patch(url)
+        .set('Authorization', readerAuthorization)
+        .send({
+          name: '  Updated Family  ',
+          currency: 'USD',
+          calendar: 'GREGORIAN',
+        })
+        .expect(200);
+      expect(body).toEqual({
+        data: expect.objectContaining({
+          id: readerFamilyId,
+          name: 'Updated Family',
+          currency: 'USD',
+          calendar: 'GREGORIAN',
+          ownerId: readerId,
+          role: FamilyRole.OWNER,
+        }),
+        meta: { path: url },
+      });
+
+      await http()
+        .patch(url)
+        .set('Authorization', readerAuthorization)
+        .send({ name: 'Renamed' })
+        .expect(200);
+      await expect(
+        prisma.family.findUnique({ where: { id: readerFamilyId } }),
+      ).resolves.toMatchObject({
+        name: 'Renamed',
+        currency: 'USD',
+        calendar: 'GREGORIAN',
+        ownerId: readerId,
+      });
+    });
+
+    it.each([
+      {},
+      { name: null },
+      { name: '  ' },
+      { currency: 'ZZZ' },
+      { calendar: 'INVALID' },
+      { ownerId: userId, name: 'Valid' },
+      { id: userId },
+      { status: 'INACTIVE' },
+      { createdAt: '2026-01-01' },
+    ])('rejects an invalid update %j', async (input) => {
+      await http()
+        .patch(`${path}/${readerFamilyId}`)
+        .set('Authorization', readerAuthorization)
+        .send(input)
+        .expect(400);
+    });
+
+    it('archives exactly once and preserves membership and financial records', async () => {
+      const { id: familyId } = await service.create(readerId, {
+        name: 'Archive target',
+      });
+      const wallet = await prisma.wallet.create({
+        data: { familyId, createdBy: readerId, name: 'Cash' },
+      });
+      const category = await prisma.category.findFirstOrThrow({
+        where: { familyId, type: CategoryType.EXPENSE },
+      });
+      const transaction = await prisma.transaction.create({
+        data: {
+          familyId,
+          walletId: wallet.id,
+          categoryId: category.id,
+          type: 'EXPENSE',
+          amountMinor: 100,
+          createdBy: readerId,
+          occurredAt: new Date(),
+        },
+      });
+      const url = `${path}/${familyId}`;
+      const results = await Promise.all([
+        http().delete(url).set('Authorization', readerAuthorization),
+        http().delete(url).set('Authorization', readerAuthorization),
+      ]);
+      expect(results.map(({ status }) => status).sort()).toEqual([200, 404]);
+      expect(results.find(({ status }) => status === 200)?.body).toEqual({
+        data: { success: true },
+        meta: { path: url },
+      });
+
+      await expect(
+        prisma.family.findUnique({ where: { id: familyId } }),
+      ).resolves.toMatchObject({ status: RecordStatus.INACTIVE });
+      await expect(
+        prisma.member.count({
+          where: { familyId, status: MemberStatus.ACTIVE },
+        }),
+      ).resolves.toBe(1);
+      await expect(
+        prisma.category.count({ where: { familyId } }),
+      ).resolves.toBe(18);
+      await expect(
+        prisma.wallet.findUnique({ where: { id: wallet.id } }),
+      ).resolves.toEqual(wallet);
+      await expect(
+        prisma.transaction.findUnique({ where: { id: transaction.id } }),
+      ).resolves.toEqual(transaction);
+      const list = await http()
+        .get(path)
+        .set('Authorization', readerAuthorization)
+        .expect(200);
+      expect(list.body.data).not.toContainEqual(
+        expect.objectContaining({ id: familyId }),
+      );
+      await http()
+        .get(url)
+        .set('Authorization', readerAuthorization)
+        .expect(404);
+      await http()
+        .patch(url)
+        .set('Authorization', readerAuthorization)
+        .send({ name: 'Denied' })
+        .expect(404);
+    });
   });
 });

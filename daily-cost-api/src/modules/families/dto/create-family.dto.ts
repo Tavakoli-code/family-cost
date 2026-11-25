@@ -26,14 +26,13 @@ export class CreateFamilyDto {
   @ApiPropertyOptional({
     description: 'Uppercase ISO 4217 currency code.',
     example: 'USD',
-    default: 'AFN',
   })
   @ValidateIf((_dto, value: unknown) => value !== undefined)
   @IsISO4217CurrencyCode()
   @Matches(/^[A-Z]{3}$/)
   currency?: string;
 
-  @ApiPropertyOptional({ enum: CalendarType, default: CalendarType.JALALI })
+  @ApiPropertyOptional({ enum: CalendarType })
   @ValidateIf((_dto, value: unknown) => value !== undefined)
   @IsEnum(CalendarType)
   calendar?: CalendarType;
