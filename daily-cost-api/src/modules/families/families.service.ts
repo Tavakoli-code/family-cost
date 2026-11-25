@@ -6,6 +6,7 @@ import {
 import { FamilyRole, MemberStatus, Prisma, RecordStatus } from '@prisma/client';
 import { DEFAULT_CATEGORIES } from '../../common/constants/default-categories';
 import { validationExceptionFactory } from '../../common/pipes/validation-exception.factory';
+import type { FamilyMembershipContext } from '../../common/types/family-membership-context.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFamilyDto } from './dto/create-family.dto';
 import { UpdateFamilyDto } from './dto/update-family.dto';
@@ -47,20 +48,8 @@ export class FamiliesService {
     return memberships.map(({ family, role }) => ({ ...family, role }));
   }
 
-  async get(userId: string, familyId: string) {
-    const membership = await this.prisma.member.findFirst({
-      where: { ...this.activeMembership(userId), familyId },
-      select: { family: true, role: true },
-    });
-
-    if (!membership) throw new NotFoundException('Family not found');
-
-    return { ...membership.family, role: membership.role };
-  }
-
   update(
-    userId: string,
-    familyId: string,
+    membership: FamilyMembershipContext,
     { name, currency, calendar }: UpdateFamilyDto,
   ) {
     if (
@@ -76,15 +65,15 @@ export class FamiliesService {
       ]);
     }
 
-    return this.updateOwnedFamily(userId, familyId, {
+    return this.updateOwnedFamily(membership, {
       name,
       currency,
       calendar,
     });
   }
 
-  async archive(userId: string, familyId: string) {
-    await this.updateOwnedFamily(userId, familyId, {
+  async archive(membership: FamilyMembershipContext) {
+    await this.updateOwnedFamily(membership, {
       status: RecordStatus.INACTIVE,
     });
     return { success: true };
@@ -99,27 +88,40 @@ export class FamiliesService {
   }
 
   private async updateOwnedFamily(
-    userId: string,
-    familyId: string,
+    { id, userId, familyId, role }: FamilyMembershipContext,
     data: Prisma.FamilyUpdateManyMutationInput,
   ) {
+    this.requireOwner(role);
+
     // Apply the ownership and active-status predicates in the write itself.
     const [family] = await this.prisma.family.updateManyAndReturn({
       where: {
         id: familyId,
         status: RecordStatus.ACTIVE,
         members: {
-          some: { userId, status: MemberStatus.ACTIVE, role: FamilyRole.OWNER },
+          some: {
+            id,
+            userId,
+            status: MemberStatus.ACTIVE,
+            role: FamilyRole.OWNER,
+          },
         },
       },
       data,
     });
     if (family) return { ...family, role: FamilyRole.OWNER };
 
-    const visibleFamily = await this.get(userId, familyId);
-    if (visibleFamily.role !== FamilyRole.OWNER) {
+    const currentMembership = await this.prisma.member.findFirst({
+      where: { ...this.activeMembership(userId), familyId },
+      select: { role: true },
+    });
+    if (currentMembership) this.requireOwner(currentMembership.role);
+    throw new NotFoundException('Family not found');
+  }
+
+  private requireOwner(role: FamilyRole) {
+    if (role !== FamilyRole.OWNER) {
       throw new ForbiddenException('Only family owners can modify the family');
     }
-    throw new NotFoundException('Family not found');
   }
 }
